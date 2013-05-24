@@ -8,6 +8,13 @@
 </head>
 <body>
 <div id="map"></div>
+<div id="panel" style="position:absolute;top:20px;left:50%;margin-left:-40%;z-index:5;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    padding:5px;border:2px solid;border-radius:25px;border-color:blue;box-shadow:10px 10px 5px #888888;
+    background-color:blue">
+    <input id="address" type="text" placeholder="enter address">
+    <input type="button" value="Search" onclick="searchAddress()">
+</div>
 <script type='text/javascript'>
 google.maps.visualRefresh = true;
 var mapDiv;
