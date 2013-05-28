@@ -2,6 +2,7 @@
 <html style="height:100%">
 <head>
 <title>Philly Sanitation Map</title>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1,
     minimum-scale=1, maximum-scale=1, user-scalable=0, target-densityDpi=device-dpi" />
 <meta name="HandheldFriendly" content="true" />
@@ -10,13 +11,18 @@
 </head>
 <body style="height:100%">
 <script type='text/javascript'>
-//google.maps.visualRefresh = true;
+// infowindow close button not working in mobile with visual refresh
+//google.maps.visualRefresh = true; 
 var mapDiv;
 var map;
 var marker;
 var infowindow;
 var today;
 var weekday;
+var upcomingHoliday;
+var upcomingHolidayWeekday;
+var upcomingHolidayPickup;
+var holidayThisWeek;
 
 var qryRecycle = 'http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/12/' + 
     'query?f=json&inSR=4326&geometry={"spatialReference":{"wkid":4326},"x":'
@@ -28,12 +34,6 @@ var qryEnd = '}&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersec
     
 var geocoder = 'http://services.phila.gov/ULRS311/Data/Location/'
 var reverseGeocoder = 'http://services.phila.gov/ULRS311/Data/Address/'
-
-function checkHoliday() {
-    today = new Date();
-    console.log( today + ' is on weekday ' + weekday[today.getDay()] );
-    // TODO: check if today is a holiday on the collection schedule
-}
 
 function getCollectionDays(x, y, standardAddr) {
     var trashDay = '';
@@ -48,11 +48,25 @@ function getCollectionDays(x, y, standardAddr) {
     
                 console.log(trashDay);
                 console.log(recycleDay);
-                // TODO: check if next scheduled collection date is a holiday
-                
-                markSpot(pos, '<div style="width:150px"><p>' + standardAddr + 
+                // check if next scheduled collection date is a holiday
+                if (!holidayThisWeek) {
+                  markSpot(pos, '<div style="width:150px"><p>' + standardAddr + 
                     '</p><h4>trash: ' + trashDay +
                     '</h4><h4>recycling: ' + recycleDay + '</h4></div>');
+                } else if ((trashDay == upcomingHolidayWeekday) || 
+                    (recycleDay == upcomingHolidayWeekday)) {
+                  
+                  var holidayMsg = upcomingHoliday.toDateString() + 
+                    " is a holiday.\n\nCollection normally scheduled for that day will happen on\n" + 
+                    upcomingHolidayPickup.toDateString() + "."
+                  markSpot(pos, '<div style="width:150px"><p>' + standardAddr + 
+                    '</p><h5>' + holidayMsg + '</h5><p style="font-size:smaller">normally scheduled trash: ' + trashDay +
+                    '</p><p style="font-size:smaller">normally scheduled recycling: ' + recycleDay + '</p></div>');
+                } else {
+                  markSpot(pos, '<div style="width:150px"><p>' + standardAddr + 
+                    '</p><h4>trash: ' + trashDay +
+                    '</h4><h4>recycling: ' + recycleDay + '</h4></div>');
+                }
              });
         } else {
             // no trash day found
@@ -94,7 +108,8 @@ function detectBrowser() {
   }
 }
 
-function initialize() {
+function setupDates() {
+  // for holiday collection schedule
   weekday = new Array(7);
   weekday[0] = 'SUN';
   weekday[1] = 'MON';
@@ -103,6 +118,52 @@ function initialize() {
   weekday[4] = 'THU';
   weekday[5] = 'FRI';
   weekday[6] = 'SAT';
+  
+  // remaining holidays for 2013 TODO: add holidays for 2014
+  var holidays = new Array(6); // holidays
+  var holidayPickup = new Array(6); // rescheduled collection date for corresponding holiday
+  holidays[0] = new Date(2013, 6, 4, 7); // Independence Day
+  holidayPickup[0] = new Date(2013, 6, 5, 7);
+  holidays[1] = new Date(2013, 8, 2, 7); // Labor Day
+  holidayPickup[1] = new Date(2013, 8, 3, 7);
+  holidays[2] = new Date(2013, 9, 14, 7); // Columbus Day
+  holidayPickup[2] = new Date(2013, 9, 15, 7);
+  holidays[3] = new Date(2013, 10, 11, 7);  // Veterans Day
+  holidayPickup[3] = new Date(2013, 10, 12, 7);
+  holidays[4] = new Date(2013, 10, 28, 7); // Thanksgiving
+  holidayPickup[4] = new Date(2013, 10, 29, 7);
+  holidays[5] = new Date(2013, 11, 25, 7);  // Christmas
+  holidayPickup[5] = new Date(2013, 11, 26, 7);
+  
+  today = new Date(2013, 6, 4, 6); // now TODO: testing
+  
+  holidayThisWeek = false;
+  var todayInt = today.getTime(); // for comparison as ints
+  console.log("today " + today.toDateString());
+  console.log("today int " + todayInt.toString());
+  var endOfWeek = today;
+  endOfWeek.setDate(today.getDate() + 7);
+  var endOfWeekInt = endOfWeek.getTime();
+  console.log("end of week " + endOfWeek.toDateString());
+  console.log("end of week int " + endOfWeekInt.toString());
+  var holidayInt;
+  for (var i = 0; i < holidays.length; i++ ) {
+    holidayInt = holidays[i].getTime();
+    console.log("holiday int " + holidayInt.toString());
+    if ( (holidayInt >= todayInt) && (holidayInt <= endOfWeekInt) ) {
+      holidayThisWeek = true;
+      upcomingHoliday = holidays[i];
+      upcomingHolidayWeekday = weekday[upcomingHoliday.getDay()];
+      upcomingHolidayPickup = holidayPickup[i];
+      break;  // found next holiday this week
+    } else if (holidayInt > endOfWeekInt) {
+      break;  // no holidays this week
+    }
+  }
+}
+
+function initialize() {
+  setupDates();  // check if there's a holiday today/this week
   
   mapDiv = document.getElementById('map');
   //detectBrowser();
@@ -118,39 +179,41 @@ function initialize() {
   
   var image = 'images/trash.png';
   marker = new google.maps.Marker({map:map, title:'sanitation collection', icon:image});
-  infowindow = new google.maps.InfoWindow({
-    content:'Howdy!'
-  });
-  
- google.maps.event.addListener(marker, 'click', function() {
+  infowindow = new google.maps.InfoWindow();
+  google.maps.event.addListener(marker, 'click', function() {
     infowindow.open(marker.get('map'), marker);
- });
+  });
     
-google.maps.event.addDomListener(map, 'click', function(e) {
-   console.log('clicked on ' + e.latLng.toString());
+  google.maps.event.addDomListener(map, 'click', function(e) {
+    console.log('clicked on ' + e.latLng.toString());
     
     // reverse geocode for address to put in label
     $.getJSON(reverseGeocoder + e.latLng.lng() + '/' + e.latLng.lat(), function(result) {
-        if (result.Locations.length > 0) {
-            var standardAddr = result.Locations[0].Address.StandardizedAddress;
-            var similarity = result.Locations[0].Address.Similarity;
-            
-            getCollectionDays(e.latLng.lng(), e.latLng.lat(), standardAddr);
-        } else {
-            // no address found; try getting trash days anyways
-            getCollectionDays(e.latLng.lng(), e.latLng.lat(), e.latLng.toString());
-        }
+      if (result.Locations.length > 0) {
+        var standardAddr = result.Locations[0].Address.StandardizedAddress;
+        var similarity = result.Locations[0].Address.Similarity;
+        getCollectionDays(e.latLng.lng(), e.latLng.lat(), standardAddr);
+      } else {
+        // no address found; try getting trash days anyways
+        getCollectionDays(e.latLng.lng(), e.latLng.lat(), e.latLng.toString());
+      }
     });
-});
-  
-  // check if today is a holiday
-  checkHoliday();
+  });
   
   // try HTML5 geolocation
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(success, error);
   } else {
     error("no HTML5 geolocation available");
+  }
+  
+  console.log("Holiday this week?" + holidayThisWeek);
+  
+  if (holidayThisWeek) {
+    // display splash message on holidays
+    alert(upcomingHoliday.toDateString() + 
+        " is a holiday.\n\nCollection normally scheduled for that day will happen on\n" + 
+        upcomingHolidayPickup.toDateString() + ".");
   }
 }
 
