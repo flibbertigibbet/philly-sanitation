@@ -109,7 +109,10 @@ function initialize() {
   var mapOptions = {
     zoom: 12,
     center: new google.maps.LatLng(39.95278,-75.163851),
-    mapTypeId: google.maps.MapTypeId.ROADMAP
+    mapTypeId: google.maps.MapTypeId.ROADMAP,
+    mapTypeControl: false,
+    zoomControl: true,
+    zoomControlOptions: { style: google.maps.ZoomControlStyle.LARGE }
   };
   map = new google.maps.Map(mapDiv, mapOptions);
   
