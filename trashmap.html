@@ -60,8 +60,10 @@ function getCollectionDays(x, y, standardAddr) {
                     " is a holiday.\n\nCollection normally scheduled for that day will happen on\n" + 
                     upcomingHolidayPickup.toDateString() + "."
                   markSpot(pos, '<div style="width:150px"><p>' + standardAddr + 
-                    '</p><h5>' + holidayMsg + '</h5><p style="font-size:smaller">normally scheduled trash: ' + trashDay +
-                    '</p><p style="font-size:smaller">normally scheduled recycling: ' + recycleDay + '</p></div>');
+                    '</p><h5>' + holidayMsg + 
+                    '</h5><p style="font-size:smaller">normally scheduled trash: ' + trashDay +
+                    '</p><p style="font-size:smaller">normally scheduled recycling: ' + 
+                    recycleDay + '</p></div>');
                 } else {
                   markSpot(pos, '<div style="width:150px"><p>' + standardAddr + 
                     '</p><h4>trash: ' + trashDay +
@@ -135,21 +137,17 @@ function setupDates() {
   holidays[5] = new Date(2013, 11, 25, 7);  // Christmas
   holidayPickup[5] = new Date(2013, 11, 26, 7);
   
-  today = new Date(2013, 6, 4, 6); // now TODO: testing
+  today = new Date(); // now
+  //today = new Date(2013, 6, 4, 6); // for testing holidays
   
   holidayThisWeek = false;
   var todayInt = today.getTime(); // for comparison as ints
-  console.log("today " + today.toDateString());
-  console.log("today int " + todayInt.toString());
   var endOfWeek = today;
   endOfWeek.setDate(today.getDate() + 7);
   var endOfWeekInt = endOfWeek.getTime();
-  console.log("end of week " + endOfWeek.toDateString());
-  console.log("end of week int " + endOfWeekInt.toString());
   var holidayInt;
   for (var i = 0; i < holidays.length; i++ ) {
     holidayInt = holidays[i].getTime();
-    console.log("holiday int " + holidayInt.toString());
     if ( (holidayInt >= todayInt) && (holidayInt <= endOfWeekInt) ) {
       holidayThisWeek = true;
       upcomingHoliday = holidays[i];
@@ -207,10 +205,7 @@ function initialize() {
     error("no HTML5 geolocation available");
   }
   
-  console.log("Holiday this week?" + holidayThisWeek);
-  
   if (holidayThisWeek) {
-    // display splash message on holidays
     alert(upcomingHoliday.toDateString() + 
         " is a holiday.\n\nCollection normally scheduled for that day will happen on\n" + 
         upcomingHolidayPickup.toDateString() + ".");
