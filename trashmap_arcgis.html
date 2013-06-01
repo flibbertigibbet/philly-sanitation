@@ -12,6 +12,7 @@
     
     <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.5compact">
     </script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
     <style type="text/css">
       html, body
       {
@@ -28,34 +29,46 @@
       }
     </style>
     <script type="text/javascript">
+      var geocoder = 'http://services.phila.gov/ULRS311/Data/Location/'
+
       dojo.require("esri.map");
       dojo.require("esri.tasks.query");
       dojo.require("esri.tasks.QueryTask");
       dojo.require("esri.dijit.PopupMobile");
+      dojo.require("esri.tasks.geometry");
+
       var map;
       var qryTrash, qryRecycling, qryTrashTask, qryRecyclingTask;
       var myOnClick_connect;
       var popup;
+      var spatialRef, geocodeRef;
+      
+      var geomSrv;
 
       function init() {
+        geomSrv = new esri.tasks.GeometryService("http://gis.phila.gov/ArcGIS/rest/services/Geometry/GeometryServer/");
+        
         qryTrashTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/13');
         qryRecyclingTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/12');
         
+        spatialRef = new esri.SpatialReference({ wkid: 2272 });
+        geocodeRef = new esri.SpatialReference({ wkid: 4326 });
+        
         qryTrash = new esri.tasks.Query();
         qryTrash.returnGeometry = false;
+        qryTrash.outSpatialReference = spatialRef;
         qryTrash.outFields = ["COLLDAY"];
         qryRecycling = new esri.tasks.Query();
         qryRecycling.returnGeometry = false;
+        qryRecycling.outSpatialReference = spatialRef;
         qryRecycling.outFields = ["COLLDAY"];
-
+        
         var initialExtent = new esri.geometry.Extent({
           "xmin": 2557616.45757814,
           "ymin": 207781.230364257,
           "xmax": 2834147.13141866,
           "ymax": 306565.784101792,
-          "spatialReference": {
-           "wkid": 2272
-          }
+          "spatialReference": spatialRef
         });
         
         popup = new esri.dijit.PopupMobile(null, dojo.create("div"));
@@ -97,6 +110,7 @@
                   "recycling: " + recycleDay);
                 
                 map.infoWindow.show(coords);
+                map.centerAndZoom(coords);
               } else {
                 console.log("no recycling day found");
               }
@@ -118,7 +132,42 @@
       function cleanup() {
         dojo.disconnect(myOnClick_connect);
       }
-
+      
+      function searchAddress() {
+        var address = document.getElementById('address').value;
+  
+        $.getJSON(geocoder + encodeURI(address), function(result) {
+          console.log(result);
+          if (result.Locations.length > 0) {
+              var standardAddr = result.Locations[0].Address.StandardizedAddress;
+              var similarity = result.Locations[0].Address.Similarity;
+              var x = result.Locations[0].XCoord;
+              var y = result.Locations[0].YCoord;
+              
+              console.log(standardAddr);
+              
+              var pt = new esri.geometry.Point(x, y, geocodeRef);
+              //searchPickup(pt);
+              
+              var sms = new esri.symbol.SimpleMarkerSymbol();
+              var attr = {"XCoord":pt.x,"YCoord":pt.y};
+              var it = new esri.InfoTemplate();
+              var graphic = new esri.Graphic(pt, sms, attr, it);
+              // TODO: reproject
+              console.log("reproject...");
+              geomSrv.project([graphic], spatialRef, function(geom) {
+                console.log("got geoms");
+                searchPickup(geom[0]);
+              });
+              
+              
+          } else {
+              // no match found
+              map.infoWindow.hide();
+          }
+        });
+      }
+      
       dojo.addOnLoad(init);
       dojo.addOnUnload(cleanup);
     </script>
@@ -126,6 +175,13 @@
 
   <body onorientationchange="orientationChanged();">
     <div id="map" style="width:100%; height:100%;">
+    </div>
+     <div id="panel" style="position:absolute;top:20px;left:60%;margin-left:-40%;z-index:3;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    padding:5px;border:2px solid;border-radius:25px;border-color: #666666;
+    box-shadow:10px 10px 5px #888888; background-color:#666666;opacity:0.8">
+        <input class="bold" id ="address" type="text" placeholder="enter address"> 
+        <input class="bold" type="button" value="Search" onclick="searchAddress()">
     </div>
   </body>
 

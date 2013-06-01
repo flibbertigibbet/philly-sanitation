@@ -73,8 +73,8 @@ function searchAddress() {
         if (result.Locations.length > 0) {
             var standardAddr = result.Locations[0].Address.StandardizedAddress;
             var similarity = result.Locations[0].Address.Similarity;
-            var x = result.Locations[0].XCoord
-            var y = result.Locations[0].YCoord
+            var x = result.Locations[0].XCoord;
+            var y = result.Locations[0].YCoord;
             
             getCollectionDays(x, y, standardAddr);
         } else {
