@@ -31,25 +31,11 @@
       dojo.require("esri.map");
       dojo.require("esri.tasks.query");
       dojo.require("esri.tasks.QueryTask");
-      dojo.require("dojo.promise.all");
-      
-      /*dojo.require("dojo.promise.all", function(all){
-        console.log("hello?");
-        all([gotTrash, gotRecycling]).then(function(results){
-          console.log("promises fulfilled!");
-          gotPickupResults(results);
-        })
-      }); */
-      
-      dojo.require("esri.dijit.InfoWindowLite");
-      dojo.require("dojo/_base/array");
-
+      dojo.require("esri.dijit.PopupMobile");
       var map;
       var qryTrash, qryRecycling, qryTrashTask, qryRecyclingTask;
-      var gotTrash, gotRecycling, promises;
       var myOnClick_connect;
-      var infoWindowLite;
-      var pickupTemplate;
+      var popup;
 
       function init() {
         qryTrashTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/13');
@@ -68,46 +54,59 @@
           "xmax": 2834147.13141866,
           "ymax": 306565.784101792,
           "spatialReference": {
-            "wkid": 2272
+           "wkid": 2272
           }
         });
+        
+        popup = new esri.dijit.PopupMobile(null, dojo.create("div"));
+        
         map = new esri.Map("map", {
-          extent: initialExtent
+          extent: initialExtent,
         });
+        
+        map.setInfoWindow(popup);
 
-        var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/GrayBase/MapServer", {infoTemplate:pickupTemplate});
+        var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/GrayBase/MapServer");
         map.addLayer(tiledMapServiceLayer);
-        
-        infoWindowLite = new esri.dijit.InfoWindowLite(null, dojo.create("div", null, map.root));
-        infoWindowLite.startup();
-        map.setInfoWindow(infoWindowLite);
-        
-        pickupTemplate = new esri.InfoTemplate();
-        pickupTemplate.setTitle("<b>Sanitation Pickup</b>");
-        pickupTemplate.setContent("<p>Trash: ${TRASH_DAY}</p><p>Recycling: ${RECYCLING_DAY}<p>");
 
         myOnClick_connect = dojo.connect(map, "onClick", gotClick);
       }
       
       function gotClick(event) {
-        searchPickup(event.mapPoint);
-        //map.graphics.add(); // ??
+        searchPickup(event.mapPoint);	
       }
       
       function searchPickup(coords) {
         // pass in esri.geometry.Point
+        
+        map.infoWindow.hide();
+        
         qryTrash.geometry = coords;
         qryRecycling.geometry = coords;
-        gotTrash = qryTrashTask.execute(qryTrash);
-        gotRecycing = qryRecyclingTask.execute(qryRecycling);
-        promises = new dojo.promise.all([gotTrash, gotRecycling]);
+        qryTrashTask.execute(qryTrash, function(trash) {
+          if (trash.features.length > 0) {
+            var trashDay = trash.features[0].attributes['COLLDAY'];
+            console.log('trash: ' + trashDay);
+            qryRecyclingTask.execute(qryRecycling, function(recycling) {
+              if (recycling.features.length > 0) {
+                var recycleDay = recycling.features[0].attributes['COLLDAY'];
+                console.log('recycle: ' + recycleDay);
+                //map.infoWindow.setTitle('trash: ' + trashDay + ' ' + 
+                //  'recycling: ' + recycleDay);
+                map.infoWindow.setTitle("trash: " + trashDay + " " + 
+                  "recycling: " + recycleDay);
+                
+                map.infoWindow.show(coords);
+              } else {
+                console.log("no recycling day found");
+              }
+            });
+          } else {
+            console.log("no trash day found for selected location");
+          }
+        });
       }
       
-      function gotPickupResults(results) {
-        // results[0] is trash, results[1] is recycling
-        conosle.log("got results");
-      }
-
       function orientationChanged() {
         console.log("Orientation changed: " + window.orientation);
         if(map){
