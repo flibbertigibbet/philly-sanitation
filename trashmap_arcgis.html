@@ -1,0 +1,134 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=7,IE=9" />
+    <title>
+      Philly Sanitation Map
+    </title>
+    <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/dojo/dijit/themes/claro/claro.css">
+    <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/esri/css/esri.css">
+    
+    <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.5compact">
+    </script>
+    <style type="text/css">
+      html, body
+      {
+        height: 100%;
+        margin: 0px;
+        padding: 0px;
+        width: 100%;
+      }
+      .esriSimpleSlider
+       div
+      {
+        height: 30px !important;
+        width: 30px !important;
+      }
+    </style>
+    <script type="text/javascript">
+      dojo.require("esri.map");
+      dojo.require("esri.tasks.query");
+      dojo.require("esri.tasks.QueryTask");
+      dojo.require("dojo.promise.all");
+      
+      /*dojo.require("dojo.promise.all", function(all){
+        console.log("hello?");
+        all([gotTrash, gotRecycling]).then(function(results){
+          console.log("promises fulfilled!");
+          gotPickupResults(results);
+        })
+      }); */
+      
+      dojo.require("esri.dijit.InfoWindowLite");
+      dojo.require("dojo/_base/array");
+
+      var map;
+      var qryTrash, qryRecycling, qryTrashTask, qryRecyclingTask;
+      var gotTrash, gotRecycling, promises;
+      var myOnClick_connect;
+      var infoWindowLite;
+      var pickupTemplate;
+
+      function init() {
+        qryTrashTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/13');
+        qryRecyclingTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/12');
+        
+        qryTrash = new esri.tasks.Query();
+        qryTrash.returnGeometry = false;
+        qryTrash.outFields = ["COLLDAY"];
+        qryRecycling = new esri.tasks.Query();
+        qryRecycling.returnGeometry = false;
+        qryRecycling.outFields = ["COLLDAY"];
+
+        var initialExtent = new esri.geometry.Extent({
+          "xmin": 2557616.45757814,
+          "ymin": 207781.230364257,
+          "xmax": 2834147.13141866,
+          "ymax": 306565.784101792,
+          "spatialReference": {
+            "wkid": 2272
+          }
+        });
+        map = new esri.Map("map", {
+          extent: initialExtent
+        });
+
+        var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/GrayBase/MapServer", {infoTemplate:pickupTemplate});
+        map.addLayer(tiledMapServiceLayer);
+        
+        infoWindowLite = new esri.dijit.InfoWindowLite(null, dojo.create("div", null, map.root));
+        infoWindowLite.startup();
+        map.setInfoWindow(infoWindowLite);
+        
+        pickupTemplate = new esri.InfoTemplate();
+        pickupTemplate.setTitle("<b>Sanitation Pickup</b>");
+        pickupTemplate.setContent("<p>Trash: ${TRASH_DAY}</p><p>Recycling: ${RECYCLING_DAY}<p>");
+
+        myOnClick_connect = dojo.connect(map, "onClick", gotClick);
+      }
+      
+      function gotClick(event) {
+        searchPickup(event.mapPoint);
+        //map.graphics.add(); // ??
+      }
+      
+      function searchPickup(coords) {
+        // pass in esri.geometry.Point
+        qryTrash.geometry = coords;
+        qryRecycling.geometry = coords;
+        gotTrash = qryTrashTask.execute(qryTrash);
+        gotRecycing = qryRecyclingTask.execute(qryRecycling);
+        promises = new dojo.promise.all([gotTrash, gotRecycling]);
+      }
+      
+      function gotPickupResults(results) {
+        // results[0] is trash, results[1] is recycling
+        conosle.log("got results");
+      }
+
+      function orientationChanged() {
+        console.log("Orientation changed: " + window.orientation);
+        if(map){
+          map.reposition();
+          map.resize();
+        }
+      }
+      
+      function cleanup() {
+        dojo.disconnect(myOnClick_connect);
+      }
+
+      dojo.addOnLoad(init);
+      dojo.addOnUnload(cleanup);
+    </script>
+  </head>
+
+  <body onorientationchange="orientationChanged();">
+    <div id="map" style="width:100%; height:100%;">
+    </div>
+  </body>
+
+</html>
+
