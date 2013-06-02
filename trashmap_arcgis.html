@@ -44,7 +44,7 @@
       var qryTrash, qryRecycling, qryTrashTask, qryRecyclingTask;
       var myOnClick_connect;
       var popup;
-      var spatialRef, geocodeRef;
+      var spatialRef, geocodeRef, mobileRef;
       
       var geomSrv;
 
@@ -55,6 +55,7 @@
         qryRecyclingTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/12');
         
         spatialRef = new esri.SpatialReference({ wkid: 2272 });
+        mobileRef = new esri.SpatialReference({ wkid: 102100 });
         geocodeRef = new esri.SpatialReference({ wkid: 4326 });
         
         qryTrash = new esri.tasks.Query();
@@ -82,7 +83,7 @@
         
         map.setInfoWindow(popup);
 
-        var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/GrayBase/MapServer");
+        var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/MobileBase/MapServer");
         map.addLayer(tiledMapServiceLayer);
 
         myOnClick_connect = dojo.connect(map, "onClick", gotClick);
@@ -156,7 +157,7 @@
               
               console.log("reprojecting...");
               
-              geomSrv.project([pt], spatialRef, function(geom) {
+              geomSrv.project([pt], mobileRef, function(geom) {
                 console.log(geom);
                 console.log("got geoms");
                 searchPickup(geom[0]);
