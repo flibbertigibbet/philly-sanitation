@@ -10,7 +10,10 @@
     <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/dojo/dijit/themes/claro/claro.css">
     <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/esri/css/esri.css">
     
-    <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.5compact">
+    <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5">
+    </script>
+    
+    <!-- <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.5compact"> -->
     </script>
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
     <style type="text/css">
@@ -77,6 +80,19 @@
           extent: initialExtent,
         });
         
+        /*
+        var projectParams = new esri.tasks.ProjectParameters();
+        projectParams.geometries = [initialExtent];
+        projectParams.outSR = spatialRef;
+
+        var defer = geomSrv.project(projectParams);
+        dojo.when(defer, function (projectedGeometry) {
+            if (projectedGeometry.length > 0) {
+                map.setExtent(projectedGeometry[0]);
+            }
+        });
+        */
+        
         map.setInfoWindow(popup);
 
         var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/GrayBase/MapServer");
@@ -93,6 +109,8 @@
         // pass in esri.geometry.Point
         
         map.infoWindow.hide();
+        
+        console.log("x: " + coords.x + " y: " + coords.y);
         
         qryTrash.geometry = coords;
         qryRecycling.geometry = coords;
@@ -145,21 +163,19 @@
               var y = result.Locations[0].YCoord;
               
               console.log(standardAddr);
+              console.log("geocoded x: " + x.toString() +  "y: " + y.toString());
               
               var pt = new esri.geometry.Point(x, y, geocodeRef);
-              //searchPickup(pt);
               
-              var sms = new esri.symbol.SimpleMarkerSymbol();
-              var attr = {"XCoord":pt.x,"YCoord":pt.y};
-              var it = new esri.InfoTemplate();
-              var graphic = new esri.Graphic(pt, sms, attr, it);
-              // TODO: reproject
-              console.log("reproject...");
-              geomSrv.project([graphic], spatialRef, function(geom) {
+              console.log("reprojecting...");
+              
+              geomSrv.project([pt], spatialRef, function(geom) {
+                console.log(geom);
                 console.log("got geoms");
                 searchPickup(geom[0]);
+              }, function errorprojected(err) {
+                console.log("reprojection error: " + err.message);
               });
-              
               
           } else {
               // no match found
