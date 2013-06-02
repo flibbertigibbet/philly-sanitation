@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <!--The viewport meta tag is used to improve the presentation and behavior of the samples 
+      on iOS devices-->
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>Finding in Philly</title>
+    <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/esri/css/esri.css">
+    <style>
+      html, body, #mapDiv {
+        padding:0;
+        margin:0;
+        height:100%;
+      }
+      #messages{
+        position:absolute;
+        top:10px;
+        right:20px;
+        padding: 6px;
+        background-color: #ccc;
+        border-radius: 4px;
+        border: solid 1px #333;
+        z-index:99;
+        max-width: 150px;
+      }
+    </style>
+    <script src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5compact"></script>
+    <script>
+      dojo.require("esri.map");
+      dojo.require("esri.tasks.query");
+      dojo.require("esri.tasks.geometry");
+      dojo.require("esri.layers.FeatureLayer");
+      
+      var map;
+
+      function init() {
+    
+        //identify proxy page to use if the toJson payload to the geometry service is greater than 2000 characters.
+        //If this null or not available the buffer operation will not work.  Otherwise it will do a http post to the proxy.
+        esri.config.defaults.io.proxyUrl = "/proxy";
+
+        var initialExtent = new esri.geometry.Extent({
+          "xmin": 2557616.45757814,
+          "ymin": 207781.230364257,
+          "xmax": 2834147.13141866,
+          "ymax": 306565.784101792,
+          "spatialReference": { wkid: 2272 }
+        });
+
+        map = new esri.Map("mapDiv", { 
+          extent: initialExtent
+        });
+        
+        var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/MobileBase/MapServer");
+        map.addLayer(tiledMapServiceLayer);
+        
+        //add the points in selection mode. Note that an info template has been defined so when 
+        //selected features are clicked a popup window will appear displaying the content defined in the info template.
+        var featureLayer = new esri.layers.FeatureLayer("http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/Parks/MapServer/0",{
+          mode: esri.layers.FeatureLayer.MODE_SELECTION,
+          infoTemplate: new esri.InfoTemplate("${NAME}", "${*}"),
+          outFields: ["NAME", "ADDRESS", "ZIPCODE"]
+        });
+
+        //define a selection symbol that will be used to draw the selected census block points within the buffer polygon
+        var symbol = new esri.symbol.SimpleMarkerSymbol(
+          esri.symbol.SimpleMarkerSymbol.STYLE_CIRCLE, 12, 
+          new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_NULL, 
+          new dojo.Color([247, 34, 101, 0.9]), 1),
+          new dojo.Color([207, 34, 171, 0.5])
+        );
+        featureLayer.setSelectionSymbol(symbol); 
+        map.addLayer(featureLayer);
+
+
+        //Define the geometry service that will be used to perform the buffer. 
+        var geometryService = new esri.tasks.GeometryService("http://gis.phila.gov/ArcGIS/rest/services/Geometry/GeometryServer/");
+
+        //when the map is clicked create a buffer around the click point of the specified distance.
+        map.on("click", function(evt){
+          //define input buffer parameters
+          var params = new esri.tasks.BufferParameters();
+          params.geometries  = [ evt.mapPoint ];
+          params.distances = [ 1 ];
+          params.unit = esri.tasks.GeometryService.UNIT_STATUTE_MILE;
+
+          geometryService.buffer(params);
+
+        });
+        geometryService.on("buffer-complete", function(result){
+          map.graphics.clear();
+          //draw the buffer geometry on the map as a map graphic
+          var symbol = new esri.symbol.SimpleFillSymbol(
+            esri.symbol.SimpleFillSymbol.STYLE_NULL,
+            new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SHORTDASHDOTDOT,
+            new dojo.Color([105,105,105]), 2),new dojo.Color([255,255,0,0.25])
+          );
+          var bufferGeometry = result.geometries[0]
+          var graphic = new esri.Graphic(bufferGeometry, symbol);
+          map.graphics.add(graphic);
+
+          //Select features within the buffered polygon. To do so we'll create a query to use the buffer graphic
+          //as the selection geometry.
+          var query = new esri.tasks.Query();
+          query.geometry = bufferGeometry;
+          featureLayer.selectFeatures(query, esri.layers.FeatureLayer.SELECTION_NEW, function(results){
+            var totalCount = countFound(results);
+            var r = "";
+            r = "<b>The total number of facilities found within the buffer is <i>" + totalCount + "</i>.</b>";
+            dojo.byId('messages').innerHTML = r;
+
+          });
+
+
+        });
+      }
+      function countFound(features) {
+        console.log("counting things.");
+        var foundTotal = 0;
+        for (var x = 0; x < features.length; x++) {
+          foundTotal += 1;
+          //popTotal = popTotal + features[x].attributes['POP2000'];
+        }
+        return foundTotal;
+      }
+      dojo.ready(init);
+    </script>
+  </head>
+
+  <body>
+    <span id="messages">Click on the map to select facilities within 1 mile </span>
+    <div id="mapDiv"></div>
+  </body>
+</html>
+
