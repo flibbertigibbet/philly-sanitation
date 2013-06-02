@@ -107,7 +107,7 @@
           featureLayer.selectFeatures(query, esri.layers.FeatureLayer.SELECTION_NEW, function(results){
             var totalCount = countFound(results);
             var r = "";
-            r = "<b>The total number found within the buffer is <i>" + totalCount + "</i>.</b>";
+            r = "<b>The total number of facilities found within the buffer is <i>" + totalCount + "</i>.</b>";
             dojo.byId('messages').innerHTML = r;
 
           });
@@ -129,7 +129,7 @@
   </head>
 
   <body>
-    <span id="messages">Click on the map to select census block points within 1 mile </span>
+    <span id="messages">Click on the map to select facilities within 1 mile </span>
     <div id="mapDiv"></div>
   </body>
 </html>
