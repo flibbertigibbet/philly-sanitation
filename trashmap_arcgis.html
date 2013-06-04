@@ -44,6 +44,9 @@
       var spatialRef, geocodeRef, mobileRef;
       
       var geomSrv;
+      
+      var trashcanPath;
+      var trashcan;
 
       function init() {
         geomSrv = new esri.tasks.GeometryService("http://gis.phila.gov/ArcGIS/rest/services/Geometry/GeometryServer/");
@@ -76,14 +79,37 @@
         
         map = new esri.Map("map", {
           extent: initialExtent,
+          mapOptions: {
+            slider: true,
+            nav: false,
+            wrapAround180: true,
+            infoWindow: popup
+          }
         });
         
-        map.setInfoWindow(popup);
+        dojo.place(popup.domNode, map.root); 
 
         var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/MobileBase/MapServer");
         map.addLayer(tiledMapServiceLayer);
 
         myOnClick_connect = dojo.connect(map, "onClick", gotClick);
+        
+        trashcanPath = "M7.845,9.983l2.034,17.353c0,0.977,2.741,1.769,6.121,1.769c3.381,0," +
+          "6.121-0.792,6.121-1.769l2.377-17.485c-2.455,1.023-6.812,1.133-8.498,1.133C14.39," +
+           "10.984,10.345,10.883,7.845,9.983zM24.13,5.752l-0.376-1.678c0-0.651-3.472" +
+           "-1.179-7.754-1.179S8.246,3.424,8.246,4.075L7.871,5.752C7.156,6.036,6.75,6.36,6.75," +
+           "6.705v1.284c0,1.102,4.142,1.995,9.25,1.995s9.25-0.894,9.25-1.995V6.705C25.25," +
+           "6.36,24.844,6.036,24.13,5.752z";
+        
+        trashcan = new esri.symbol.SimpleMarkerSymbol();
+        trashcan.setPath(trashcanPath);
+        trashcan.setColor(new dojo.Color("#d143de"));
+        // lt green #27d61e
+        
+        trashcan.setOutline(null);
+        
+        tiledMapServiceLayer.setSelectionSymbol(trashcan);
+        
       }
       
       function gotClick(event) {
@@ -94,6 +120,7 @@
         // pass in esri.geometry.Point
         
         map.infoWindow.hide();
+        map.graphics.clear();
         
         console.log("x: " + coords.x + " y: " + coords.y);
         
@@ -107,11 +134,14 @@
               if (recycling.features.length > 0) {
                 var recycleDay = recycling.features[0].attributes['COLLDAY'];
                 console.log('recycle: ' + recycleDay);
-                //map.infoWindow.setTitle('trash: ' + trashDay + ' ' + 
-                //  'recycling: ' + recycleDay);
-                map.infoWindow.setTitle("trash: " + trashDay + " " + 
-                  "recycling: " + recycleDay);
                 
+                map.infoWindow.setTitle("Pickup Days");
+                map.infoWindow.setContent("<p>trash: " + trashDay + " " + 
+                  "recycling: " + recycleDay + "</p>");
+                
+                var graphic = new esri.Graphic(coords, trashcan);
+                map.graphics.add(graphic);
+          
                 map.infoWindow.show(coords);
                 map.centerAndZoom(coords);
               } else {
