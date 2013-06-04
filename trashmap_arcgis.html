@@ -9,6 +9,7 @@
     </title>
     <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/dojo/dijit/themes/claro/claro.css">
     <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/esri/css/esri.css">
+    <link rel="stylesheet" type="text/css" href="trashstyle.css">
     
     <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5compact">
     </script>
@@ -123,10 +124,14 @@
       }
       
       function gotClick(event) {
+        reprojectAndSearch(event.mapPoint);
+      }
+      
+      function reprojectAndSearch(pt) {
         console.log("reprojecting...");
               
        // reproject click point to spherical mercator
-        geomSrv.project([event.mapPoint], geocodeRef, function(geom) {
+        geomSrv.project([pt], geocodeRef, function(geom) {
           console.log(geom);
           console.log("got geoms");
           
@@ -135,7 +140,7 @@
             if (result.Locations.length > 0) {
               var standardAddr = result.Locations[0].Address.StandardizedAddress;
               var similarity = result.Locations[0].Address.Similarity;
-              searchPickup(event.mapPoint, standardAddr);
+              searchPickup(pt, standardAddr);
             } else {
               // no address found; try getting trash days anyways
               searchPickup(event.mapPoint, "Pickup");
@@ -329,26 +334,13 @@
     }
 
     function success(position) {
-        //getCollectionDays(position.coords.longitude, position.coords.latitude, 
-        //    position.coords.latitude.toString() + ', ' + position.coords.longitude.toString());
         
         console.log("HTML5 coordinates: " + position.coords.latitude.toString() + ', ' + position.coords.longitude.toString());
-        // reverse geocode for address to put in label
-        /*
-        $.getJSON(reverseGeocoder + position.coords.longitude + '/' + 
-            position.coords.latitude, function(result) {
-            if (result.Locations.length > 0) {
-                var standardAddr = result.Locations[0].Address.StandardizedAddress;
-                var similarity = result.Locations[0].Address.Similarity;
-                
-                getCollectionDays(position.coords.longitude, position.coords.latitude, standardAddr);
-            } else {
-                // no address found; try getting trash days anyways
-                getCollectionDays(position.coords.longitude, position.coords.latitude,
-                    position.coords.latitude.toString() + ', ' + position.coords.longitude.toString());
-            }
-        });
-        */
+        
+        var pt = new esri.geometry.Point(position.coords.longitude, 
+          position.coords.latitude, geocodeRef);
+          
+        reprojectAndSearch(pt);
     }
 
     function error(msg) {
@@ -388,6 +380,13 @@
         return false;
       });
     </script>
+    <div id="loading">
+      <div class="bubblingG">
+        <span id="bubblingG_1"></span>
+        <span id="bubblingG_2"></span>
+        <span id="bubblingG_3"></span>
+      </div>
+    </div>
   </body>
 
 </html>
