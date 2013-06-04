@@ -12,10 +12,18 @@
   </head>
   <body>
     <div id="map"></div>
-    <div id="panel">
-        <input class="bold" id ="address" type="text" placeholder="enter address"> 
-        <input class="bold" type="button" value="Search" onclick="searchAddress()">
-    </div>
+    <form id="myform">
+      <div id="panel">
+          <input class="bold" id ="address" type="text" placeholder="enter address"> 
+          <input class="bold" type="submit" value="Search">
+      </div>
+    </form>
+    <script type="text/javascript">
+    $('#myform').submit(function() {
+        searchAddress();
+        return false;
+      });
+    </script>
     <div id="loading">
       <div class="bubblingG">
         <span id="bubblingG_1"></span>

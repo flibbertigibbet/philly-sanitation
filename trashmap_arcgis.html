@@ -27,14 +27,20 @@
         height: 30px !important;
         width: 30px !important;
       }
+      .esriScalebar{
+        padding: 20px 20px;
+      }
+      #map{
+        padding:0;
+      }
     </style>
     <script type="text/javascript">
       var geocoder = 'http://services.phila.gov/ULRS311/Data/Location/'
+      var reverseGeocoder = 'http://services.phila.gov/ULRS311/Data/Address/'
 
       dojo.require("esri.map");
       dojo.require("esri.tasks.query");
       dojo.require("esri.tasks.QueryTask");
-      dojo.require("esri.dijit.PopupMobile");
       dojo.require("esri.tasks.geometry");
 
       var map;
@@ -42,10 +48,14 @@
       var myOnClick_connect;
       var popup;
       var spatialRef, geocodeRef, mobileRef;
-      
       var geomSrv;
+      var trashcanPath, trashcan;
+      var today, weekday, upcomingHoliday, upcomingHolidayWeekday;
+      var upcomingHolidayPickup, holidayThisWeek;
 
       function init() {
+        setupDates();  // check if there's a holiday today/this week
+        
         geomSrv = new esri.tasks.GeometryService("http://gis.phila.gov/ArcGIS/rest/services/Geometry/GeometryServer/");
         
         qryTrashTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/13');
@@ -72,28 +82,77 @@
           "spatialReference": spatialRef
         });
         
-        popup = new esri.dijit.PopupMobile(null, dojo.create("div"));
-        
         map = new esri.Map("map", {
           extent: initialExtent,
+            slider: true,
+            nav: false,
+            wrapAround180: true,
         });
         
-        map.setInfoWindow(popup);
-
         var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/MobileBase/MapServer");
         map.addLayer(tiledMapServiceLayer);
 
         myOnClick_connect = dojo.connect(map, "onClick", gotClick);
+        
+        trashcanPath = "M7.845,9.983l2.034,17.353c0,0.977,2.741,1.769,6.121,1.769c3.381,0," +
+          "6.121-0.792,6.121-1.769l2.377-17.485c-2.455,1.023-6.812,1.133-8.498,1.133C14.39," +
+           "10.984,10.345,10.883,7.845,9.983zM24.13,5.752l-0.376-1.678c0-0.651-3.472" +
+           "-1.179-7.754-1.179S8.246,3.424,8.246,4.075L7.871,5.752C7.156,6.036,6.75,6.36,6.75," +
+           "6.705v1.284c0,1.102,4.142,1.995,9.25,1.995s9.25-0.894,9.25-1.995V6.705C25.25," +
+           "6.36,24.844,6.036,24.13,5.752z";
+        
+        trashcan = new esri.symbol.SimpleMarkerSymbol();
+        trashcan.setPath(trashcanPath);
+        trashcan.setColor(new dojo.Color("#d143de"));
+        // lt green #27d61e
+        
+        trashcan.setOutline(null);
+        
+        // try HTML5 geolocation
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(success, error);
+        } else {
+          error("no HTML5 geolocation available");
+        }
+        
+        if (holidayThisWeek) {
+          alert(upcomingHoliday.toDateString() + 
+              " is a holiday.\n\nCollection normally scheduled for that day will happen on\n" + 
+              upcomingHolidayPickup.toDateString() + ".");
+        }
       }
       
       function gotClick(event) {
-        searchPickup(event.mapPoint);	
+        console.log("reprojecting...");
+              
+       // reproject click point to spherical mercator
+        geomSrv.project([event.mapPoint], geocodeRef, function(geom) {
+          console.log(geom);
+          console.log("got geoms");
+          
+          // reverse geocode for address to put in label
+          $.getJSON(reverseGeocoder + geom[0].x + '/' + geom[0].y, function(result) {
+            if (result.Locations.length > 0) {
+              var standardAddr = result.Locations[0].Address.StandardizedAddress;
+              var similarity = result.Locations[0].Address.Similarity;
+              searchPickup(event.mapPoint, standardAddr);
+            } else {
+              // no address found; try getting trash days anyways
+              searchPickup(event.mapPoint, "Pickup");
+            }
+          });
+        }, function errorprojected(err) {
+          console.log("reprojection error: " + err.message);
+          // try getting trash days anyways
+          searchPickup(event.mapPoint, "Pickup");
+        });
       }
       
-      function searchPickup(coords) {
-        // pass in esri.geometry.Point
+      function searchPickup(coords, addr) {
+        // pass in esri.geometry.Point and address for label
         
         map.infoWindow.hide();
+        map.graphics.clear();
         
         console.log("x: " + coords.x + " y: " + coords.y);
         
@@ -107,13 +166,33 @@
               if (recycling.features.length > 0) {
                 var recycleDay = recycling.features[0].attributes['COLLDAY'];
                 console.log('recycle: ' + recycleDay);
-                //map.infoWindow.setTitle('trash: ' + trashDay + ' ' + 
-                //  'recycling: ' + recycleDay);
-                map.infoWindow.setTitle("trash: " + trashDay + " " + 
-                  "recycling: " + recycleDay);
                 
+                if (!holidayThisWeek) {
+                  map.infoWindow.setContent("<p>trash: " + trashDay + " " + 
+                    "recycling: " + recycleDay + "</p>");
+                  
+                } else if ((trashDay == upcomingHolidayWeekday) || 
+                    (recycleDay == upcomingHolidayWeekday)) {
+                  
+                  var holidayMsg = upcomingHoliday.toDateString() + 
+                    " is a holiday.\n\nCollection normally scheduled for that day will happen on\n" + 
+                    upcomingHolidayPickup.toDateString() + ".";
+                                                                                                                                                          
+                  map.infoWindow.setContent("<h3>" + holidayMsg + 
+                    "</h3><p>normally scheduled trash: " + trashDay + " " + 
+                    "normally scheduled recycling: " + recycleDay + "</p>");
+                 
+                } else {
+                  map.infoWindow.setContent("<p>trash: " + trashDay + " " + 
+                    "recycling: " + recycleDay + "</p>");
+                }
+                
+                map.infoWindow.setTitle(addr);
+                var graphic = new esri.Graphic(coords, trashcan);
+                map.graphics.add(graphic);
                 map.infoWindow.show(coords);
                 map.centerAndZoom(coords);
+                  
               } else {
                 console.log("no recycling day found");
               }
@@ -157,7 +236,7 @@
               geomSrv.project([pt], mobileRef, function(geom) {
                 console.log(geom);
                 console.log("got geoms");
-                searchPickup(geom[0]);
+                searchPickup(geom[0], standardAddr);
               }, function errorprojected(err) {
                 console.log("reprojection error: " + err.message);
               });
@@ -172,12 +251,128 @@
       dojo.addOnLoad(init);
       dojo.addOnUnload(cleanup);
 
+    function setupDates() {
+      // for holiday collection schedule
+      weekday = new Array(7);
+      weekday[0] = 'SUN';
+      weekday[1] = 'MON';
+      weekday[2] = 'TUE';
+      weekday[3] = 'WED';
+      weekday[4] = 'THU';
+      weekday[5] = 'FRI';
+      weekday[6] = 'SAT';
+      
+      // remaining holidays for 2013 and through 2014
+      // assuming 2014 holiday calendar is the same as for 2013
+      var holidays = new Array(6); // holidays
+      var holidayPickup = new Array(6); // rescheduled collection date for corresponding holiday
+      
+      holidays[0] = new Date(2013, 6, 4, 7); // Independence Day
+      holidayPickup[0] = new Date(2013, 6, 5, 7);
+      holidays[1] = new Date(2013, 8, 2, 7); // Labor Day
+      holidayPickup[1] = new Date(2013, 8, 3, 7);
+      holidays[2] = new Date(2013, 9, 14, 7); // Columbus Day
+      holidayPickup[2] = new Date(2013, 9, 15, 7);
+      holidays[3] = new Date(2013, 10, 11, 7);  // Veterans Day
+      holidayPickup[3] = new Date(2013, 10, 12, 7);
+      holidays[4] = new Date(2013, 10, 28, 7); // Thanksgiving
+      holidayPickup[4] = new Date(2013, 10, 29, 7);
+      holidays[5] = new Date(2013, 11, 25, 7);  // Christmas
+      holidayPickup[5] = new Date(2013, 11, 26, 7);
+      holidays[6] = new Date(2014, 0, 1, 7); // New Year's
+      holidayPickup[6] = new Date(2014, 0, 2);
+      holidays[7] = new Date(2014, 0, 20, 7); // MLK Day
+      holidayPickup[7] = new Date(2014, 0, 21);
+      holidays[8] = new Date(2014, 1, 17, 7); // President's Day
+      holidayPickup[8] = new Date(2014, 1, 18);
+      holidays[9] = new Date(2014, 2, 18, 7); // Good Friday
+      holidayPickup[9] = new Date(2014, 2, 19);
+      holidays[10] = new Date(2014, 4, 26, 7); // Memorial Day
+      holidayPickup[10] = new Date(2014, 4, 27);
+      holidays[11] = new Date(2014, 6, 4, 7); // Independence Day
+      holidayPickup[11] = new Date(2014, 6, 5);
+      holidays[12] = new Date(2014, 8, 1, 7); // Labor Day
+      holidayPickup[12] = new Date(2014, 8, 2);
+      holidays[13] = new Date(2014, 9, 13, 7); // Columbus Day
+      holidayPickup[13] = new Date(2014, 9, 14);
+      holidays[14] = new Date(2014, 10, 11, 7); // Veterans Day
+      holidayPickup[14] = new Date(2014, 10, 12);
+      holidays[15] = new Date(2014, 10, 27, 7); // Thanksgiving
+      holidayPickup[15] = new Date(2014, 10, 28, 7);
+      holidays[15] = new Date(2014, 11, 25, 7); // Christmas
+      holidayPickup[15] = new Date(2014, 11, 26, 7);
+      holidays[16] = new Date(2015, 0, 1, 7); // New Year's
+      holidayPickup[16] = new Date(2015, 0, 2);
+      
+      today = new Date(); // now
+      //today = new Date(2013, 6, 4, 6); // for testing holidays
+      console.log("today is " + today);
+      
+      holidayThisWeek = false;
+      var todayInt = today.getTime(); // for comparison as ints
+      var endOfWeek = today;
+      endOfWeek.setDate(today.getDate() + 7);
+      var endOfWeekInt = endOfWeek.getTime();
+      var holidayInt;
+      for (var i = 0; i < holidays.length; i++ ) {
+        holidayInt = holidays[i].getTime();
+        if ( (holidayInt >= todayInt) && (holidayInt <= endOfWeekInt) ) {
+          holidayThisWeek = true;
+          upcomingHoliday = holidays[i];
+          upcomingHolidayWeekday = weekday[upcomingHoliday.getDay()];
+          upcomingHolidayPickup = holidayPickup[i];
+          break;  // found next holiday this week
+        } else if (holidayInt > endOfWeekInt) {
+          break;  // no holidays this week
+        }
+      }
+    }
+
+    function success(position) {
+        //getCollectionDays(position.coords.longitude, position.coords.latitude, 
+        //    position.coords.latitude.toString() + ', ' + position.coords.longitude.toString());
+        
+        console.log("HTML5 coordinates: " + position.coords.latitude.toString() + ', ' + position.coords.longitude.toString());
+        // reverse geocode for address to put in label
+        /*
+        $.getJSON(reverseGeocoder + position.coords.longitude + '/' + 
+            position.coords.latitude, function(result) {
+            if (result.Locations.length > 0) {
+                var standardAddr = result.Locations[0].Address.StandardizedAddress;
+                var similarity = result.Locations[0].Address.Similarity;
+                
+                getCollectionDays(position.coords.longitude, position.coords.latitude, standardAddr);
+            } else {
+                // no address found; try getting trash days anyways
+                getCollectionDays(position.coords.longitude, position.coords.latitude,
+                    position.coords.latitude.toString() + ', ' + position.coords.longitude.toString());
+            }
+        });
+        */
+    }
+
+    function error(msg) {
+      console.log(msg);
+    }
+    
+    // use loading spinner animation
+    $(document).ajaxStart(function() {
+      $('#loading').show();
+    }).ajaxStop(function() {
+      $('#loading').hide();
+    });
     </script>
   </head>
 
   <body onorientationchange="orientationChanged();">
-    <div id="map" style="width:100%; height:100%;">
-    </div>
+  <div data-dojo-type="dijit.layout.BorderContainer" 
+    data-dojo-props="design:'headline', gutters:false" 
+    style="width: 100%; height: 100%; margin: 0;">
+    <div id="map"
+      data-dojo-type="dijit.layout.ContentPane" 
+      data-dojo-props="region:'center'" 
+      style="border:1px solid #000;padding:0;width:100%; height:100%;"></div>
+  </div>
     <form id="myform">
      <div id="panel" style="position:absolute;top:20px;left:60%;margin-left:-40%;z-index:3;
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
