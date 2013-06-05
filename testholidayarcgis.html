@@ -13,7 +13,7 @@
     <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5compact">
     </script>
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
-    <script src="philly_sanitation_holidays.js" type='text/javascript'></script>
+    <script src="test_philly_sanitation_holidays.js" type='text/javascript'></script>
     <script type="text/javascript">
       var geocoder = 'http://services.phila.gov/ULRS311/Data/Location/'
       // to geocode into map's projection
@@ -97,10 +97,6 @@
           navigator.geolocation.getCurrentPosition(success, error);
         } else {
           error("no HTML5 geolocation available");
-        }
-        
-        if (holidayThisWeek()) {
-          alert(holidayMessage());
         }
       }
       
@@ -267,6 +263,7 @@
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     padding:5px;border:2px solid;border-radius:25px;border-color: #666666;
     box-shadow:10px 10px 5px #888888; background-color:#666666;opacity:0.8">
+    	<h2>TESTING A HOLIDAY</h2>
         <input class="bold" id ="address" type="text" placeholder="enter address"> 
         <input class="bold" type="submit" value="Search">
     </div>
