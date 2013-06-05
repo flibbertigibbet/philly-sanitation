@@ -1,0 +1,287 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=7,IE=9" />
+    <title>
+      Philly Sanitation Map
+    </title>
+    <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/dojo/dijit/themes/claro/claro.css">
+    <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5/js/esri/css/esri.css">
+    <link rel="stylesheet" type="text/css" href="trashstyle.css">
+    <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.5compact">
+    </script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
+    <script src="test_philly_sanitation_holidays.js" type='text/javascript'></script>
+    <script type="text/javascript">
+      var geocoder = 'http://services.phila.gov/ULRS311/Data/Location/'
+      // to geocode into map's projection
+      // var geocoder2272 = 'http://services.phila.gov/ULRS311/Data/Location2272/'
+      var reverseGeocoder = 'http://services.phila.gov/ULRS311/Data/Address/'
+
+      dojo.require("esri.map");
+      dojo.require("esri.tasks.query");
+      dojo.require("esri.tasks.QueryTask");
+      dojo.require("esri.tasks.geometry");
+
+      var map;
+      var qryTrash, qryRecycling, qryTrashTask, qryRecyclingTask;
+      var myOnClick_connect;
+      var popup;
+      var spatialRef, geocodeRef, mobileRef;
+      var geomSrv;
+      var trashcanPath, trashcan;
+
+      function init() {
+        $.ajaxSetup({
+          cache: true
+        });
+
+        // load holiday script and check if there's a holiday today/this week
+        $.getScript("philly_sanitation_holidays.js", setupDates());
+        
+        geomSrv = new esri.tasks.GeometryService("http://gis.phila.gov/ArcGIS/rest/services/Geometry/GeometryServer/");
+        qryTrashTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/13');
+        qryRecyclingTask = new esri.tasks.QueryTask('http://gis.phila.gov/ArcGIS/rest/services/PhilaGov/ServiceAreas/MapServer/12');
+        
+        spatialRef = new esri.SpatialReference({ wkid: 2272 });
+        mobileRef = new esri.SpatialReference({ wkid: 102100 });
+        geocodeRef = new esri.SpatialReference({ wkid: 4326 });
+        
+        qryTrash = new esri.tasks.Query();
+        qryTrash.returnGeometry = false;
+        qryTrash.outSpatialReference = spatialRef;
+        qryTrash.outFields = ["COLLDAY"];
+        qryRecycling = new esri.tasks.Query();
+        qryRecycling.returnGeometry = false;
+        qryRecycling.outSpatialReference = spatialRef;
+        qryRecycling.outFields = ["COLLDAY"];
+        
+        var initialExtent = new esri.geometry.Extent({
+          "xmin": 2557616.45757814,
+          "ymin": 207781.230364257,
+          "xmax": 2834147.13141866,
+          "ymax": 306565.784101792,
+          "spatialReference": spatialRef
+        });
+        
+        map = new esri.Map("map", {
+          extent: initialExtent,
+            slider: true,
+            nav: false,
+            wrapAround180: true,
+        });
+        
+        var tiledMapServiceLayer = new esri.layers.ArcGISTiledMapServiceLayer("http://gis.phila.gov/ArcGIS/rest/services/BaseMaps/MobileBase/MapServer");
+        map.addLayer(tiledMapServiceLayer);
+
+        myOnClick_connect = dojo.connect(map, "onClick", gotClick);
+        
+        trashcanPath = "M7.845,9.983l2.034,17.353c0,0.977,2.741,1.769,6.121,1.769c3.381,0," +
+          "6.121-0.792,6.121-1.769l2.377-17.485c-2.455,1.023-6.812,1.133-8.498,1.133C14.39," +
+           "10.984,10.345,10.883,7.845,9.983zM24.13,5.752l-0.376-1.678c0-0.651-3.472" +
+           "-1.179-7.754-1.179S8.246,3.424,8.246,4.075L7.871,5.752C7.156,6.036,6.75,6.36,6.75," +
+           "6.705v1.284c0,1.102,4.142,1.995,9.25,1.995s9.25-0.894,9.25-1.995V6.705C25.25," +
+           "6.36,24.844,6.036,24.13,5.752z";
+        
+        trashcan = new esri.symbol.SimpleMarkerSymbol();
+        trashcan.setPath(trashcanPath);
+        trashcan.setColor(new dojo.Color("#d143de"));
+        // lt green #27d61e
+        
+        trashcan.setOutline(null);
+        
+        // try HTML5 geolocation
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(success, error);
+        } else {
+          error("no HTML5 geolocation available");
+        }
+      }
+      
+      function gotClick(event) {
+        reprojectAndSearch(event.mapPoint);
+      }
+      
+      function reprojectAndSearch(pt) {
+        console.log("reprojecting...");
+              
+       // reproject click point to spherical mercator
+        geomSrv.project([pt], geocodeRef, function(geom) {
+          console.log(geom);
+          console.log("got geoms");
+          
+          // reverse geocode for address to put in label
+          $.getJSON(reverseGeocoder + geom[0].x + '/' + geom[0].y, function(result) {
+            if (result.Locations.length > 0) {
+              var standardAddr = result.Locations[0].Address.StandardizedAddress;
+              var similarity = result.Locations[0].Address.Similarity;
+              searchPickup(pt, standardAddr);
+            } else {
+              // no address found; try getting trash days anyways
+              searchPickup(event.mapPoint, "Pickup");
+            }
+          });
+        }, function errorprojected(err) {
+          console.log("reprojection error: " + err.message);
+          // try getting trash days anyways
+          searchPickup(event.mapPoint, "Pickup");
+        });
+      }
+      
+      function searchPickup(coords, addr) {
+        // pass in esri.geometry.Point and address for label
+        
+        map.infoWindow.hide();
+        map.graphics.clear();
+        
+        console.log("x: " + coords.x + " y: " + coords.y);
+        
+        qryTrash.geometry = coords;
+        qryRecycling.geometry = coords;
+        qryTrashTask.execute(qryTrash, function(trash) {
+          if (trash.features.length > 0) {
+            var trashDay = trash.features[0].attributes['COLLDAY'];
+            console.log('trash: ' + trashDay);
+            qryRecyclingTask.execute(qryRecycling, function(recycling) {
+              if (recycling.features.length > 0) {
+                var recycleDay = recycling.features[0].attributes['COLLDAY'];
+                console.log('recycle: ' + recycleDay);
+                
+                if (!holidayThisWeek()) {
+                  map.infoWindow.setContent("<p>trash: " + trashDay + " " + 
+                    "recycling: " + recycleDay + "</p>");
+                  
+                } else if ((trashDay == upcomingHolidayWeekday) || 
+                    (recycleDay == upcomingHolidayWeekday)) {
+                                                                                                                                                          
+                  map.infoWindow.setContent("<h3>" + holidayMessage() + 
+                    "</h3><p>normally scheduled trash: " + trashDay + " " + 
+                    "normally scheduled recycling: " + recycleDay + "</p>");
+                 
+                } else {
+                  map.infoWindow.setContent("<p>trash: " + trashDay + " " + 
+                    "recycling: " + recycleDay + "</p>");
+                }
+                
+                map.infoWindow.setTitle(addr);
+                var graphic = new esri.Graphic(coords, trashcan);
+                map.graphics.add(graphic);
+                map.infoWindow.show(coords);
+                map.centerAndZoom(coords);
+                  
+              } else {
+                console.log("no recycling day found");
+              }
+            });
+          } else {
+            console.log("no trash day found for selected location");
+          }
+        });
+      }
+      
+      function orientationChanged() {
+        console.log("Orientation changed: " + window.orientation);
+        if(map){
+          map.reposition();
+          map.resize();
+        }
+      }
+      
+      function cleanup() {
+        dojo.disconnect(myOnClick_connect);
+      }
+      
+      function searchAddress() {
+        var address = document.getElementById('address').value;
+  
+        $.getJSON(geocoder + encodeURI(address), function(result) {
+          console.log(result);
+          if (result.Locations.length > 0) {
+              var standardAddr = result.Locations[0].Address.StandardizedAddress;
+              var similarity = result.Locations[0].Address.Similarity;
+              var x = result.Locations[0].XCoord;
+              var y = result.Locations[0].YCoord;
+              
+              console.log(standardAddr);
+              console.log("geocoded x: " + x.toString() +  " y: " + y.toString());
+              console.log("reprojecting...");
+              var pt = new esri.geometry.Point(x, y, geocodeRef);
+              
+              geomSrv.project([pt], mobileRef, function(geom) {
+                console.log(geom);
+                console.log("got geoms");
+                searchPickup(geom[0], standardAddr);
+              }, function errorprojected(err) {
+                console.log("reprojection error: " + err.message);
+              });
+          } else {
+              // no match found
+              map.infoWindow.hide();
+          }
+        });
+      }
+      
+      dojo.addOnLoad(init);
+      dojo.addOnUnload(cleanup);
+
+    function success(position) {
+        
+        console.log("HTML5 coordinates: " + position.coords.latitude.toString() + ', ' + position.coords.longitude.toString());
+        
+        var pt = new esri.geometry.Point(position.coords.longitude, 
+          position.coords.latitude, geocodeRef);
+          
+        reprojectAndSearch(pt);
+    }
+
+    function error(msg) {
+      console.log(msg);
+    }
+    
+    // use loading spinner animation
+    $(document).ajaxStart(function() {
+      $('#loading').show();
+    }).ajaxStop(function() {
+      $('#loading').hide();
+    });
+    </script>
+  </head>
+
+  <body onorientationchange="orientationChanged();">
+  <div data-dojo-type="dijit.layout.BorderContainer" 
+    data-dojo-props="design:'headline', gutters:false" 
+    style="width: 100%; height: 100%; margin: 0;">
+    <div id="map"
+      data-dojo-type="dijit.layout.ContentPane" 
+      data-dojo-props="region:'center'" 
+      style="border:1px solid #000;padding:0;width:100%; height:100%;"></div>
+  </div>
+    <form id="myform">
+     <div id="panel" style="position:absolute;top:20px;left:60%;margin-left:-40%;z-index:3;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    padding:5px;border:2px solid;border-radius:25px;border-color: #666666;
+    box-shadow:10px 10px 5px #888888; background-color:#666666;opacity:0.8">
+    	<h2>TESTING A HOLIDAY</h2>
+        <input class="bold" id ="address" type="text" placeholder="enter address"> 
+        <input class="bold" type="submit" value="Search">
+    </div>
+    </form>
+    <script type="text/javascript">
+    $('#myform').submit(function() {
+        searchAddress();
+        return false;
+      });
+    </script>
+    <div id="loading">
+      <div class="bubblingG">
+        <span id="bubblingG_1"></span>
+        <span id="bubblingG_2"></span>
+        <span id="bubblingG_3"></span>
+      </div>
+    </div>
+  </body>
+
+</html>
+

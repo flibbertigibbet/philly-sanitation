@@ -124,10 +124,6 @@ function initialize() {
   } else {
     error("no HTML5 geolocation available");
   }
-  
-  if (holidayThisWeek()) {
-    alert(holidayMessage());
-  }
 }
 
 function success(position) {

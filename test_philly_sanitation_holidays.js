@@ -1,3 +1,4 @@
+// SETS DATE/TIME TO JULY 4th AT 6AM
 var today;
 var weekday;
 var upcomingHoliday;
@@ -68,8 +69,8 @@ function setupDates() {
   holidays[16] = new Date(2015, 0, 1, 7); // New Year's
   holidayPickup[16] = new Date(2015, 0, 2);
   
-  today = new Date(); // now
-  //today = new Date(2013, 6, 4, 6); // for testing holidays
+  //today = new Date(); // now
+  today = new Date(2013, 6, 4, 6); // for testing holidays
   
   holidayThisWeek = false;
   var todayInt = today.getTime(); // for comparison as ints
